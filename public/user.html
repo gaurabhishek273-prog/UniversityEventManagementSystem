@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>UEMS - Student/Staff Portal</title>
+    <style>
+        body { font-family: Arial; margin: 0; padding: 20px; background: #f5f5f5; }
+        .header { background: white; padding: 20px; margin-bottom: 20px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .event { background: white; border-radius: 10px; padding: 20px; margin: 15px 0; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .event h3 { color: #007bff; margin-top: 0; }
+        .subevent { margin-left: 20px; padding: 15px; background: #f8f9fa; border-left: 4px solid #007bff; margin: 10px 0; border-radius: 5px; }
+        .event-info { margin: 10px 0; }
+        .event-info strong { color: #333; }
+        .no-events { text-align: center; color: #666; margin: 50px 0; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0056b3; }
+        .btn-success { background: #28a745; }
+        .btn-success:hover { background: #218838; }
+        .btn-warning { background: #ffc107; color: #212529; }
+        .btn-warning:hover { background: #e0a800; }
+        .feedback-form { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .feedback-form textarea, .feedback-form input, .feedback-form select { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
+        .rating { margin: 10px 0; }
+        .rating input { margin: 0 5px; width: auto; }
+        .feedback-form button { width: auto; margin: 5px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>University Events Portal</h1>
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <div id="eventsList"></div>
+
+    <script>
+        async function loadEvents() {
+            try {
+                const response = await fetch('/api/events');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const events = await response.json();
+                
+                const eventsList = document.getElementById('eventsList');
+                
+                if (events.length === 0) {
+                    eventsList.innerHTML = '<div class="no-events"><h3>No events available</h3></div>';
+                    return;
+                }
+                
+                eventsList.innerHTML = events.map(event => `
+                    <div class="event">
+                        <h3>${event.title}</h3>
+                        ${event.media && event.media.length > 0 ? event.media.slice(0, 3).map(item => {
+                            try {
+                                return item.type === 'image' ? 
+                                `<img src="${item.data}" alt="Event Image" style="max-width: 300px; height: auto; margin: 5px; border-radius: 10px;" onerror="this.style.display='none'">` :
+                                `<video src="${item.data}" controls style="max-width: 300px; height: auto; margin: 5px; border-radius: 10px;" onerror="this.style.display='none'"></video>`;
+                            } catch (e) {
+                                return '';
+                            }
+                        }).join('') : ''}
+                        <p>${event.description}</p>
+                        <div class="event-info">
+                            <strong>👨‍🏫 Coordinator:</strong> ${event.coordinator_name || 'Not assigned'} ${event.coordinator_phone ? `(${event.coordinator_phone})` : ''}
+                        </div>
+                        <div class="event-info">
+                            <strong>📍 Venue:</strong> ${event.venue_name || 'No venue specified'}
+                        </div>
+                        <div class="event-info">
+                            <strong>📅 Date:</strong> ${event.start_date} to ${event.end_date}
+                        </div>
+                        <div class="event-info">
+                            <strong>🕐 Time:</strong> ${event.start_time} - ${event.end_time}
+                        </div>
+                        <div class="event-info">
+                            <strong>📊 Status:</strong> ${event.status}
+                        </div>
+                        <div class="event-info">
+                            <strong>💰 Type:</strong> ${event.is_paid ? `Paid (₹${event.price})` : 'Free'}
+                        </div>
+                        ${event.is_paid && (event.discount_attendance || event.discount_exam_score) && event.discount_amount ? `
+                            <div class="event-info">
+                                <strong>🎓 ₹${event.discount_amount} Discount:</strong> ${event.discount_attendance ? `Attendance ≥${event.discount_attendance}%` : ''} ${event.discount_attendance && event.discount_exam_score ? ' OR ' : ''} ${event.discount_exam_score ? `Exam Score ≥${event.discount_exam_score}%` : ''}
+                            </div>
+                        ` : ''}
+                        
+                        <div style="margin: 15px 0;">
+                            <button class="btn-success" onclick="showRegistrationForm(${event.Event_id})">Register</button>
+                            <button class="btn-warning" onclick="toggleFeedback(${event.Event_id})">Give Feedback</button>
+                        </div>
+                        
+                        <div id="registration-${event.Event_id}" class="feedback-form" style="display: none;">
+                            <h5>Event Registration</h5>
+                            ${event.is_paid ? `<p><strong>Event Fee: ₹${event.price}</strong></p>` : '<p><strong>Free Event</strong></p>'}
+                            ${event.is_paid && (event.discount_attendance || event.discount_exam_score) && event.discount_amount ? `<p><em>₹${event.discount_amount} discount for students with: ${event.discount_attendance ? `Attendance ≥${event.discount_attendance}%` : ''} ${event.discount_attendance && event.discount_exam_score ? ' OR ' : ''} ${event.discount_exam_score ? `Exam Score ≥${event.discount_exam_score}%` : ''}</em></p>` : ''}
+                            <form onsubmit="registerForEvent(${event.Event_id}, event)">
+                                <input type="text" id="reg-name-${event.Event_id}" placeholder="Full Name" required oninput="saveFormData(${event.Event_id})">
+                                <input type="text" id="reg-roll-${event.Event_id}" placeholder="Roll Number" required pattern="[A-Za-z0-9]{4,15}" title="Roll number should be 4-15 alphanumeric characters" oninput="saveFormData(${event.Event_id})">
+                                <select id="reg-branch-${event.Event_id}" required onchange="saveFormData(${event.Event_id})">
+                                    <option value="">Select Branch</option>
+                                    <option value="Computer Science">Computer Science</option>
+                                    <option value="Information Technology">Information Technology</option>
+                                    <option value="Electronics">Electronics</option>
+                                    <option value="Mechanical">Mechanical</option>
+                                    <option value="Civil">Civil</option>
+                                    <option value="Electrical">Electrical</option>
+                                </select>
+                                <input type="tel" id="reg-mobile-${event.Event_id}" placeholder="Mobile Number" required pattern="[0-9]{10}" title="Mobile number must be exactly 10 digits" oninput="saveFormData(${event.Event_id})">
+                                <input type="email" id="reg-email-${event.Event_id}" placeholder="Email Address" required oninput="saveFormData(${event.Event_id})">
+                                ${event.is_paid && (event.discount_attendance || event.discount_exam_score) ? `
+                                    ${event.discount_attendance ? `<input type="number" id="reg-attendance-${event.Event_id}" placeholder="Attendance Percentage" min="0" max="100" step="0.1" oninput="saveFormData(${event.Event_id}); calculatePrice(${event.Event_id})">` : ''}
+                                    ${event.discount_exam_score ? `<input type="number" id="reg-exam-${event.Event_id}" placeholder="Exam Score Percentage" min="0" max="100" step="0.1" oninput="saveFormData(${event.Event_id}); calculatePrice(${event.Event_id})">` : ''}
+                                    <div id="price-display-${event.Event_id}" style="font-weight: bold; color: #007bff; margin: 10px 0;">Final Price: ₹${event.price}</div>
+                                ` : ''}
+                                <button type="submit">Submit Registration</button>
+                                <button type="button" onclick="hideRegistrationForm(${event.Event_id})">Cancel</button>
+                            </form>
+                        </div>
+                        
+                        <div id="feedback-${event.Event_id}" class="feedback-form" style="display: none;">
+                            <h5>Submit Feedback</h5>
+                            <div class="rating">
+                                <label>Rating:</label>
+                                <input type="radio" name="rating-${event.Event_id}" value="1"> 1
+                                <input type="radio" name="rating-${event.Event_id}" value="2"> 2
+                                <input type="radio" name="rating-${event.Event_id}" value="3"> 3
+                                <input type="radio" name="rating-${event.Event_id}" value="4"> 4
+                                <input type="radio" name="rating-${event.Event_id}" value="5"> 5
+                            </div>
+                            <textarea id="comments-${event.Event_id}" placeholder="Your comments..." rows="3"></textarea>
+                            <button onclick="submitFeedback(${event.Event_id})">Submit Feedback</button>
+                        </div>
+                        
+                        ${(event.subEvents || []).length > 0 ? `
+                            <h4>Sub-Events:</h4>
+                            ${(event.subEvents || []).map(sub => `
+                                <div class="subevent">
+                                    <h5>📋 Sub-Event: ${sub.title}</h5>
+                                    <div class="event-info">
+                                        <strong>🎯 Parent Event:</strong> ${event.title}
+                                    </div>
+                                    <p>${sub.description}</p>
+                                    <div class="event-info">
+                                        <strong>📍 Location:</strong> ${sub.location}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        ` : ''}
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load events:', error);
+                document.getElementById('eventsList').innerHTML = '<div class="no-events"><h3>Failed to load events</h3></div>';
+            }
+        }
+
+        function showRegistrationForm(eventId) {
+            document.getElementById(`registration-${eventId}`).style.display = 'block';
+            // Restore saved data if exists
+            restoreFormData(eventId);
+        }
+        
+        function hideRegistrationForm(eventId) {
+            document.getElementById(`registration-${eventId}`).style.display = 'none';
+        }
+        
+        function saveFormData(eventId) {
+            try {
+                const attendanceEl = document.getElementById(`reg-attendance-${eventId}`);
+                const examEl = document.getElementById(`reg-exam-${eventId}`);
+                const formData = {
+                    name: document.getElementById(`reg-name-${eventId}`).value,
+                    rollNo: document.getElementById(`reg-roll-${eventId}`).value,
+                    branch: document.getElementById(`reg-branch-${eventId}`).value,
+                    mobile: document.getElementById(`reg-mobile-${eventId}`).value,
+                    email: document.getElementById(`reg-email-${eventId}`).value,
+                    attendance: attendanceEl ? attendanceEl.value : '',
+                    examScore: examEl ? examEl.value : ''
+                };
+                localStorage.setItem(`regForm_${eventId}`, JSON.stringify(formData));
+            } catch (e) {
+                console.log('Could not save form data');
+            }
+        }
+        
+        function restoreFormData(eventId) {
+            try {
+                const saved = localStorage.getItem(`regForm_${eventId}`);
+                if (saved) {
+                    const formData = JSON.parse(saved);
+                    document.getElementById(`reg-name-${eventId}`).value = formData.name || '';
+                    document.getElementById(`reg-roll-${eventId}`).value = formData.rollNo || '';
+                    document.getElementById(`reg-branch-${eventId}`).value = formData.branch || '';
+                    document.getElementById(`reg-mobile-${eventId}`).value = formData.mobile || '';
+                    document.getElementById(`reg-email-${eventId}`).value = formData.email || '';
+                    const attendanceEl = document.getElementById(`reg-attendance-${eventId}`);
+                    const examEl = document.getElementById(`reg-exam-${eventId}`);
+                    if (attendanceEl) attendanceEl.value = formData.attendance || '';
+                    if (examEl) examEl.value = formData.examScore || '';
+                    calculatePrice(eventId);
+                }
+            } catch (e) {
+                console.log('Could not restore form data');
+            }
+        }
+        
+        function clearFormData(eventId) {
+            try {
+                localStorage.removeItem(`regForm_${eventId}`);
+            } catch (e) {
+                console.log('Could not clear form data');
+            }
+        }
+        
+        function calculatePrice(eventId) {
+            const events = JSON.parse(localStorage.getItem('events') || '[]');
+            const event = events.find(e => e.Event_id === eventId);
+            if (!event || !event.is_paid) return;
+            
+            const attendanceEl = document.getElementById(`reg-attendance-${eventId}`);
+            const examEl = document.getElementById(`reg-exam-${eventId}`);
+            const priceDisplayEl = document.getElementById(`price-display-${eventId}`);
+            
+            if (!priceDisplayEl) return;
+            
+            const attendance = attendanceEl ? parseFloat(attendanceEl.value) || 0 : 0;
+            const examScore = examEl ? parseFloat(examEl.value) || 0 : 0;
+            
+            const attendanceQualifies = event.discount_attendance && attendance >= event.discount_attendance;
+            const examQualifies = event.discount_exam_score && examScore >= event.discount_exam_score;
+            
+            if (attendanceQualifies || examQualifies) {
+                const discountedPrice = Math.max(0, event.price - (event.discount_amount || 0));
+                priceDisplayEl.innerHTML = `Final Price: <span style="color: green;">₹${discountedPrice} (₹${event.discount_amount} Discount Applied!)</span>`;
+            } else {
+                priceDisplayEl.innerHTML = `Final Price: ₹${event.price}`;
+            }
+        }
+        
+        async function registerForEvent(eventId, event) {
+            event.preventDefault();
+            
+            const name = document.getElementById(`reg-name-${eventId}`).value.trim();
+            const rollNo = document.getElementById(`reg-roll-${eventId}`).value.trim();
+            const branch = document.getElementById(`reg-branch-${eventId}`).value;
+            const mobile = document.getElementById(`reg-mobile-${eventId}`).value.trim();
+            const email = document.getElementById(`reg-email-${eventId}`).value.trim();
+            const attendanceEl = document.getElementById(`reg-attendance-${eventId}`);
+            const examEl = document.getElementById(`reg-exam-${eventId}`);
+            const attendance = attendanceEl ? parseFloat(attendanceEl.value) || null : null;
+            const examScore = examEl ? parseFloat(examEl.value) || null : null;
+            
+            // Validation - allow letters, spaces, and common name characters
+            if (name.length < 2 || name.length > 50) {
+                alert('Name should be between 2-50 characters');
+                return;
+            }
+            if (!/^[A-Za-z\s.''-]+$/.test(name)) {
+                alert('Name should contain only letters, spaces, dots, apostrophes, and hyphens');
+                return;
+            }
+            
+            if (!/^[A-Za-z0-9]{4,15}$/.test(rollNo)) {
+                alert('Roll number should be 4-15 alphanumeric characters');
+                return;
+            }
+            
+            if (!/^[0-9]{10}$/.test(mobile)) {
+                alert('Mobile number must be exactly 10 digits');
+                return;
+            }
+            
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                alert('Please enter a valid email address');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/register/${eventId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, rollNo, branch, mobile, email, attendance, exam_score: examScore })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Successfully registered for the event!');
+                    hideRegistrationForm(eventId);
+                    document.querySelector(`#registration-${eventId} form`).reset();
+                    clearFormData(eventId);
+                } else {
+                    alert(data.error || 'Registration failed');
+                }
+            } catch (error) {
+                alert('Registration failed');
+            }
+        }
+
+        function toggleFeedback(eventId) {
+            const feedbackDiv = document.getElementById(`feedback-${eventId}`);
+            feedbackDiv.style.display = feedbackDiv.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function submitFeedback(eventId) {
+            const rating = document.querySelector(`input[name="rating-${eventId}"]:checked`);
+            const comments = document.getElementById(`comments-${eventId}`).value;
+            
+            if (!rating) {
+                alert('Please select a rating');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/feedback/${eventId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        rating: parseInt(rating.value),
+                        comments: comments
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Feedback submitted successfully!');
+                    document.getElementById(`feedback-${eventId}`).style.display = 'none';
+                } else {
+                    alert(data.error || 'Failed to submit feedback');
+                }
+            } catch (error) {
+                alert('Failed to submit feedback');
+            }
+        }
+
+        async function logout() {
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.href = '/';
+        }
+
+        // Load events when page loads
+        loadEvents();
+        
+        // Store events in localStorage for price calculation
+        async function storeEvents() {
+            try {
+                const response = await fetch('/api/events');
+                const events = await response.json();
+                localStorage.setItem('events', JSON.stringify(events));
+            } catch (e) {
+                console.log('Could not store events');
+            }
+        }
+        
+        storeEvents();
+        
+        // Refresh events every 30 seconds
+        setInterval(() => {
+            loadEvents();
+            storeEvents();
+        }, 30000);
+    </script>
+
+    <!-- AI Event Assistant -->
+<div id="ai-chat-button" onclick="toggleAIChat()">
+    🤖
+</div>
+
+<div id="ai-chat-box">
+    <div id="ai-chat-header">
+        <span>🤖 UEMS AI Assistant</span>
+        <button onclick="toggleAIChat()">×</button>
+    </div>
+
+    <div id="ai-chat-messages">
+        <div class="ai-message">
+            Hello! I'm your UEMS AI Assistant. Ask me about university events.
+        </div>
+    </div>
+
+    <div id="ai-chat-input-area">
+        <input
+            type="text"
+            id="ai-question"
+            placeholder="Ask about events..."
+            onkeydown="if(event.key === 'Enter') sendAIQuestion()"
+        >
+        <button onclick="sendAIQuestion()">Send</button>
+    </div>
+</div>
+
+<style>
+#ai-chat-button {
+    position: fixed;
+    right: 25px;
+    bottom: 25px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #1976d2;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    z-index: 9999;
+}
+
+#ai-chat-box {
+    display: none;
+    position: fixed;
+    right: 25px;
+    bottom: 95px;
+    width: 360px;
+    height: 500px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 5px 25px rgba(0,0,0,0.3);
+    overflow: hidden;
+    z-index: 9999;
+    border: 1px solid #ddd;
+}
+
+#ai-chat-header {
+    height: 55px;
+    background: #1976d2;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 15px;
+    font-weight: bold;
+}
+
+#ai-chat-header button {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 25px;
+    cursor: pointer;
+}
+
+#ai-chat-messages {
+    height: 370px;
+    overflow-y: auto;
+    padding: 15px;
+    background: #f5f5f5;
+}
+
+.ai-message,
+.user-message {
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    border-radius: 10px;
+    max-width: 85%;
+    line-height: 1.4;
+}
+
+.ai-message {
+    background: white;
+    border: 1px solid #ddd;
+}
+
+.user-message {
+    background: #1976d2;
+    color: white;
+    margin-left: auto;
+}
+
+#ai-chat-input-area {
+    display: flex;
+    padding: 10px;
+    border-top: 1px solid #ddd;
+    background: white;
+}
+
+#ai-question {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    outline: none;
+}
+
+#ai-chat-input-area button {
+    margin-left: 8px;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 6px;
+    background: #1976d2;
+    color: white;
+    cursor: pointer;
+}
+</style>
+
+<script>
+function toggleAIChat() {
+    const chatBox = document.getElementById('ai-chat-box');
+
+    if (chatBox.style.display === 'none' || chatBox.style.display === '') {
+        chatBox.style.display = 'block';
+    } else {
+        chatBox.style.display = 'none';
+    }
+}
+
+async function sendAIQuestion() {
+    const input = document.getElementById('ai-question');
+    const messages = document.getElementById('ai-chat-messages');
+
+    const question = input.value.trim();
+
+    if (!question) {
+        return;
+    }
+
+    // Show user's question
+    const userMessage = document.createElement('div');
+    userMessage.className = 'user-message';
+    userMessage.textContent = question;
+    messages.appendChild(userMessage);
+
+    input.value = '';
+
+    // Loading message
+    const loadingMessage = document.createElement('div');
+    loadingMessage.className = 'ai-message';
+    loadingMessage.textContent = 'Thinking...';
+    messages.appendChild(loadingMessage);
+
+    messages.scrollTop = messages.scrollHeight;
+
+    try {
+        const response = await fetch('/api/ai/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                question: question
+            })
+        });
+
+        const data = await response.json();
+
+        loadingMessage.remove();
+
+        const aiMessage = document.createElement('div');
+        aiMessage.className = 'ai-message';
+
+        if (data.success) {
+            aiMessage.textContent = data.answer;
+        } else {
+            aiMessage.textContent = data.message || 'Something went wrong.';
+        }
+
+        messages.appendChild(aiMessage);
+
+    } catch (error) {
+        loadingMessage.remove();
+
+        const errorMessage = document.createElement('div');
+        errorMessage.className = 'ai-message';
+        errorMessage.textContent = 'Unable to connect to the AI assistant.';
+
+        messages.appendChild(errorMessage);
+
+        console.error(error);
+    }
+
+    messages.scrollTop = messages.scrollHeight;
+}
+</script>
+</body>
+</html>

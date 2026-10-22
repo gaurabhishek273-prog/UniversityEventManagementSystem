@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>UEMS - Faculty Dashboard</title>
+    <style>
+        body { font-family: Arial; margin: 0; padding: 20px; background: #f5f5f5; }
+        .header { background: white; padding: 20px; margin-bottom: 20px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .section { background: white; padding: 20px; margin: 20px 0; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .form-group { margin: 15px 0; }
+        input, textarea, select { width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 5px; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0056b3; }
+        .event { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .subevent { margin-left: 20px; padding: 10px; background: #f8f9fa; border-left: 3px solid #007bff; margin: 10px 0; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        h3 { color: #333; margin-top: 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Faculty Dashboard - UEMS</h1>
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <div class="grid">
+        <div class="section">
+            <h3>Create New Event</h3>
+            <form id="eventForm">
+                <div class="form-group">
+                    <input type="text" id="eventTitle" placeholder="Event Title" required>
+                </div>
+                <div class="form-group">
+                    <textarea id="eventDescription" placeholder="Event Description" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <select id="eventVenue" required>
+                        <option value="">Select Venue</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <select id="eventScheme">
+                        <option value="">Select Discount Scheme (Optional)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Start Date & Time:</label>
+                    <input type="date" id="eventStartDate" required>
+                    <input type="time" id="eventStartTime" required>
+                </div>
+                <div class="form-group">
+                    <label>End Date & Time:</label>
+                    <input type="date" id="eventEndDate" required>
+                    <input type="time" id="eventEndTime" required>
+                </div>
+                <button type="submit">Create Event</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h3>Add Sub-Event</h3>
+            <form id="subEventForm">
+                <div class="form-group">
+                    <select id="parentEvent" required>
+                        <option value="">Select Parent Event</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <input type="text" id="subEventTitle" placeholder="Sub-Event Title" required>
+                </div>
+                <div class="form-group">
+                    <textarea id="subEventDescription" placeholder="Sub-Event Description" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <input type="text" id="subEventLocation" placeholder="Location" required>
+                </div>
+                <div class="form-group">
+                    <label>Start Date & Time:</label>
+                    <input type="date" id="subEventStartDate" required>
+                    <input type="time" id="subEventStartTime" required>
+                </div>
+                <div class="form-group">
+                    <label>End Date & Time:</label>
+                    <input type="date" id="subEventEndDate" required>
+                    <input type="time" id="subEventEndTime" required>
+                </div>
+                <button type="submit">Add Sub-Event</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>All Registrations</h3>
+        <button onclick="loadAllRegistrations()">Refresh Registrations</button>
+        <div id="allRegistrationsList"></div>
+    </div>
+
+    <div class="section">
+        <h3>All Events</h3>
+        <div id="eventsList"></div>
+    </div>
+
+    <script>
+        async function loadData() {
+            try {
+                // Load venues
+                const venuesResponse = await fetch('/api/venues');
+                const venues = await venuesResponse.json();
+                const venueSelect = document.getElementById('eventVenue');
+                venueSelect.innerHTML = '<option value="">Select Venue</option>';
+                venues.forEach(venue => {
+                    venueSelect.innerHTML += `<option value="${venue.Venue_id}">${venue.name} - ${venue.location}</option>`;
+                });
+
+                // Load discount schemes
+                const schemesResponse = await fetch('/api/discount-schemes');
+                const schemes = await schemesResponse.json();
+                const schemeSelect = document.getElementById('eventScheme');
+                schemeSelect.innerHTML = '<option value="">Select Discount Scheme (Optional)</option>';
+                schemes.forEach(scheme => {
+                    schemeSelect.innerHTML += `<option value="${scheme.Scheme_id}">${scheme.name} (${scheme.discount_percentage}%)</option>`;
+                });
+
+                // Load events
+                const eventsResponse = await fetch('/api/events');
+                const events = await eventsResponse.json();
+                
+                // Update parent event dropdown
+                const parentSelect = document.getElementById('parentEvent');
+                parentSelect.innerHTML = '<option value="">Select Parent Event</option>';
+                events.forEach(event => {
+                    parentSelect.innerHTML += `<option value="${event.Event_id}">${event.title}</option>`;
+                });
+                
+                // Display events
+                const eventsList = document.getElementById('eventsList');
+                eventsList.innerHTML = events.map(event => `
+                    <div class="event">
+                        <h4>${event.title}</h4>
+                        ${event.media ? event.media.map(item => 
+                            item.type === 'image' ? 
+                            `<img src="${item.data}" alt="Event Image" style="max-width: 250px; height: auto; margin: 5px; border-radius: 5px;">` :
+                            `<video src="${item.data}" controls style="max-width: 250px; height: auto; margin: 5px; border-radius: 5px;"></video>`
+                        ).join('') : ''}
+                        <p>${event.description}</p>
+                        <p><strong>Faculty:</strong> ${event.faculty_name}</p>
+                        <p><strong>Venue:</strong> ${event.venue_name} - ${event.venue_location}</p>
+                        <p><strong>Date:</strong> ${event.start_date} to ${event.end_date}</p>
+                        <p><strong>Time:</strong> ${event.start_time} - ${event.end_time}</p>
+                        <p><strong>Status:</strong> 
+                            <select onchange="updateEventStatus(${event.Event_id}, this.value)">
+                                <option value="planned" ${event.status === 'planned' ? 'selected' : ''}>Planned</option>
+                                <option value="ongoing" ${event.status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
+                                <option value="completed" ${event.status === 'completed' ? 'selected' : ''}>Completed</option>
+                                <option value="cancelled" ${event.status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+                            </select>
+                        </p>
+                        
+                        <div style="margin: 15px 0;">
+                            <button onclick="viewRegistrations(${event.Event_id})">View Registrations</button>
+                            <button onclick="viewFeedback(${event.Event_id})">View Feedback</button>
+                            <button onclick="deleteEvent(${event.Event_id})" style="background: #dc3545;">Delete Event</button>
+                        </div>
+                        
+                        <div id="registrations-${event.Event_id}" style="display: none; background: #e3f2fd; padding: 15px; margin: 10px 0; border-radius: 5px;">
+                            <h6>Registered Students:</h6>
+                            <div id="reg-list-${event.Event_id}"></div>
+                        </div>
+                        
+                        <div id="feedback-${event.Event_id}" style="display: none; background: #f3e5f5; padding: 15px; margin: 10px 0; border-radius: 5px;">
+                            <h6>Event Feedback:</h6>
+                            <div id="feedback-list-${event.Event_id}"></div>
+                        </div>
+                        
+                        ${event.subEvents.length > 0 ? `
+                            <h5>Sub-Events:</h5>
+                            ${event.subEvents.map(sub => `
+                                <div class="subevent">
+                                    <h6>📋 Sub-Event: ${sub.title}</h6>
+                                    <p><strong>🎯 Parent Event:</strong> ${event.title}</p>
+                                    <p>${sub.description}</p>
+                                    <p><strong>Location:</strong> ${sub.location}</p>
+                                    <p><strong>Date:</strong> ${sub.start_date} to ${sub.end_date}</p>
+                                    <p><strong>Time:</strong> ${sub.start_time} - ${sub.end_time}</p>
+                                </div>
+                            `).join('')}
+                        ` : ''}
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load data:', error);
+            }
+        }
+
+        document.getElementById('eventForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = {
+                title: document.getElementById('eventTitle').value,
+                description: document.getElementById('eventDescription').value,
+                venue_id: document.getElementById('eventVenue').value,
+                scheme_id: document.getElementById('eventScheme').value || null,
+                start_date: document.getElementById('eventStartDate').value,
+                end_date: document.getElementById('eventEndDate').value,
+                start_time: document.getElementById('eventStartTime').value,
+                end_time: document.getElementById('eventEndTime').value
+            };
+            
+            try {
+                const response = await fetch('/api/events', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (response.ok) {
+                    document.getElementById('eventForm').reset();
+                    loadData();
+                    alert('Event created successfully!');
+                } else {
+                    alert('Failed to create event');
+                }
+            } catch (error) {
+                alert('Failed to create event');
+            }
+        });
+
+        document.getElementById('subEventForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const eventId = document.getElementById('parentEvent').value;
+            const formData = {
+                title: document.getElementById('subEventTitle').value,
+                description: document.getElementById('subEventDescription').value,
+                location: document.getElementById('subEventLocation').value,
+                start_date: document.getElementById('subEventStartDate').value,
+                end_date: document.getElementById('subEventEndDate').value,
+                start_time: document.getElementById('subEventStartTime').value,
+                end_time: document.getElementById('subEventEndTime').value
+            };
+            
+            try {
+                const response = await fetch(`/api/events/${eventId}/subevents`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (response.ok) {
+                    document.getElementById('subEventForm').reset();
+                    loadData();
+                    alert('Sub-event added successfully!');
+                } else {
+                    alert('Failed to add sub-event');
+                }
+            } catch (error) {
+                alert('Failed to add sub-event');
+            }
+        });
+
+        async function updateEventStatus(eventId, status) {
+            try {
+                await fetch(`/api/events/${eventId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status })
+                });
+                loadData();
+            } catch (error) {
+                alert('Failed to update event status');
+            }
+        }
+
+        async function deleteEvent(eventId) {
+            if (confirm('Are you sure you want to delete this event?')) {
+                try {
+                    await fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+                    loadData();
+                    alert('Event deleted successfully!');
+                } catch (error) {
+                    alert('Failed to delete event');
+                }
+            }
+        }
+
+        async function viewRegistrations(eventId) {
+            const regDiv = document.getElementById(`registrations-${eventId}`);
+            const regList = document.getElementById(`reg-list-${eventId}`);
+            
+            if (regDiv.style.display === 'none') {
+                try {
+                    const response = await fetch(`/api/registrations/${eventId}`);
+                    const registrations = await response.json();
+                    
+                    if (registrations.length === 0) {
+                        regList.innerHTML = '<p>No registrations yet.</p>';
+                    } else {
+                        regList.innerHTML = `
+                            <table style="width: 100%; border-collapse: collapse; margin: 10px 0;">
+                                <thead>
+                                    <tr style="background: #f0f8ff;">
+                                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Name</th>
+                                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Roll No</th>
+                                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Branch</th>
+                                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Mobile</th>
+                                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Email</th>
+                                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Date</th>
+                                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${registrations.map(reg => `
+                                        <tr>
+                                            <td style="border: 1px solid #ddd; padding: 6px;">${reg.name}</td>
+                                            <td style="border: 1px solid #ddd; padding: 6px;">${reg.rollNo}</td>
+                                            <td style="border: 1px solid #ddd; padding: 6px;">${reg.branch}</td>
+                                            <td style="border: 1px solid #ddd; padding: 6px;">${reg.mobile}</td>
+                                            <td style="border: 1px solid #ddd; padding: 6px;">${reg.email}</td>
+                                            <td style="border: 1px solid #ddd; padding: 6px;">${new Date(reg.registration_date).toLocaleDateString()}</td>
+                                            <td style="border: 1px solid #ddd; padding: 6px;">${reg.status}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                            <p><strong>Total Registrations: ${registrations.length}</strong></p>
+                        `;
+                    }
+                    regDiv.style.display = 'block';
+                } catch (error) {
+                    alert('Failed to load registrations');
+                }
+            } else {
+                regDiv.style.display = 'none';
+            }
+        }
+
+        async function viewFeedback(eventId) {
+            const feedbackDiv = document.getElementById(`feedback-${eventId}`);
+            const feedbackList = document.getElementById(`feedback-list-${eventId}`);
+            
+            if (feedbackDiv.style.display === 'none') {
+                try {
+                    const response = await fetch(`/api/feedback/${eventId}`);
+                    const feedback = await response.json();
+                    
+                    if (feedback.length === 0) {
+                        feedbackList.innerHTML = '<p>No feedback yet.</p>';
+                    } else {
+                        feedbackList.innerHTML = feedback.map(fb => `
+                            <div style="border: 1px solid #ddd; padding: 10px; margin: 5px 0; border-radius: 3px;">
+                                <strong>${fb.user_name}</strong> (${fb.user_email})<br>
+                                <div style="color: #ff9800;">Rating: ${'★'.repeat(fb.rating)}${'☆'.repeat(5-fb.rating)} (${fb.rating}/5)</div>
+                                <p>${fb.comments}</p>
+                                <small>Submitted: ${new Date(fb.feedback_date).toLocaleString()}</small>
+                            </div>
+                        `).join('');
+                    }
+                    feedbackDiv.style.display = 'block';
+                } catch (error) {
+                    alert('Failed to load feedback');
+                }
+            } else {
+                feedbackDiv.style.display = 'none';
+            }
+        }
+
+        async function loadAllRegistrations() {
+            try {
+                const response = await fetch('/api/all-registrations');
+                const registrations = await response.json();
+                
+                const regList = document.getElementById('allRegistrationsList');
+                
+                if (registrations.length === 0) {
+                    regList.innerHTML = '<p>No registrations found.</p>';
+                } else {
+                    regList.innerHTML = `
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; margin: 10px 0;">
+                                <thead>
+                                    <tr style="background: #f5f5f5;">
+                                        <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Name</th>
+                                        <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Roll No</th>
+                                        <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Branch</th>
+                                        <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Mobile</th>
+                                        <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Email</th>
+                                        <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Event</th>
+                                        <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Date</th>
+                                        <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${registrations.map(reg => `
+                                        <tr>
+                                            <td style="border: 1px solid #ddd; padding: 8px;">${reg.name}</td>
+                                            <td style="border: 1px solid #ddd; padding: 8px;">${reg.rollNo}</td>
+                                            <td style="border: 1px solid #ddd; padding: 8px;">${reg.branch}</td>
+                                            <td style="border: 1px solid #ddd; padding: 8px;">${reg.mobile}</td>
+                                            <td style="border: 1px solid #ddd; padding: 8px;">${reg.email}</td>
+                                            <td style="border: 1px solid #ddd; padding: 8px;">${reg.event_title}</td>
+                                            <td style="border: 1px solid #ddd; padding: 8px;">${new Date(reg.registration_date).toLocaleDateString()}</td>
+                                            <td style="border: 1px solid #ddd; padding: 8px;">${reg.status}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        <p><strong>Total Registrations: ${registrations.length}</strong></p>
+                    `;
+                }
+            } catch (error) {
+                console.error('Failed to load registrations:', error);
+                document.getElementById('allRegistrationsList').innerHTML = '<p>Failed to load registrations.</p>';
+            }
+        }
+
+        async function logout() {
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.href = '/';
+        }
+
+        loadData();
+        loadAllRegistrations();
+    </script>
+</body>
+</html>

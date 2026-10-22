@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .form-section { background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 5px; }
+        .form-group { margin: 10px 0; }
+        input, textarea, select { width: 100%; padding: 8px; margin: 5px 0; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; margin: 5px; }
+        .events-list { margin-top: 30px; }
+        .event { border: 1px solid #ddd; padding: 15px; margin: 10px 0; position: relative; }
+        .subevent { margin-left: 20px; padding: 10px; background: #f9f9f9; border-left: 3px solid #007bff; }
+        .edit-btn { position: absolute; top: 10px; right: 10px; background: #28a745; }
+        .modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4); }
+        .modal-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 600px; max-height: 80vh; overflow-y: auto; }
+        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .error { color: red; margin: 10px 0; }
+        .registration-item, .feedback-item { border: 1px solid #eee; padding: 10px; margin: 5px 0; background: #f9f9f9; }
+        .rating { color: #ff9800; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Admin Dashboard</h1>
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <div class="form-section">
+        <h3>Add New Event</h3>
+        <form id="eventForm">
+            <div class="form-group">
+                <input type="text" id="eventTitle" placeholder="Event Title" required>
+            </div>
+            <div class="form-group">
+                <textarea id="eventDescription" placeholder="Event Description" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <select id="eventVenue" required>
+                    <option value="">Select Venue</option>
+                    <option value="Naad">Naad</option>
+                    <option value="LDV 1st floor">LDV 1st floor</option>
+                    <option value="LDV 2nd floor">LDV 2nd floor</option>
+                    <option value="Sports Ground">Sports Ground</option>
+                    <option value="Mg 1st floor">Mg 1st floor</option>
+                    <option value="Mg 2nd floor">Mg 2nd floor</option>
+                    <option value="Seminar hall(Mg506)">Seminar hall(Mg506)</option>
+                    <option value="LDV seminar hall">LDV seminar hall</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <input type="text" id="eventCoordinatorName" placeholder="Coordinator Name" required>
+            </div>
+            <div class="form-group">
+                <input type="tel" id="eventCoordinatorPhone" placeholder="Coordinator Phone Number" required pattern="[0-9]{10}" title="Phone number must be exactly 10 digits">
+            </div>
+            <div class="form-group">
+                <input type="number" id="eventBudget" placeholder="Budget Amount (Optional)" min="0" step="0.01">
+            </div>
+            <div class="form-group">
+                <input type="text" id="eventSponsor" placeholder="Sponsor Name (Optional)">
+            </div>
+            <div class="form-group">
+                <label><input type="checkbox" id="eventIsPaid"> Paid Event</label>
+            </div>
+            <div class="form-group" id="pricingSection" style="display: none;">
+                <input type="number" id="eventPrice" placeholder="Event Price" min="0" step="0.01">
+                <input type="number" id="discountAmount" placeholder="Discount Amount (₹)" min="0" step="0.01">
+                <input type="number" id="discountAttendance" placeholder="Min Attendance % for Discount" min="0" max="100" step="0.1">
+                <input type="number" id="discountExamScore" placeholder="Min Exam Score % for Discount" min="0" max="100" step="0.1">
+            </div>
+            <div class="form-group">
+                <input type="file" id="eventMedia" accept="image/*,video/*" multiple>
+                <label for="eventMedia">Choose Event Images/Videos (Optional)</label>
+            </div>
+            <div class="form-group">
+                <label>Start Date & Time:</label>
+                <input type="date" id="eventStartDate" required>
+                <input type="time" id="eventStartTime" required>
+            </div>
+            <div class="form-group">
+                <label>End Date & Time:</label>
+                <input type="date" id="eventEndDate" required>
+                <input type="time" id="eventEndTime" required>
+            </div>
+            <button type="submit">Add Event</button>
+        </form>
+    </div>
+
+    <div class="form-section">
+        <h3>Add Sub-Event</h3>
+        <form id="subEventForm">
+            <div class="form-group">
+                <select id="parentEvent" required>
+                    <option value="">Select Parent Event</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <input type="text" id="subEventTitle" placeholder="Sub-Event Title" required>
+            </div>
+            <div class="form-group">
+                <textarea id="subEventDescription" placeholder="Sub-Event Description" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <select id="subEventLocation" required>
+                    <option value="">Select Location</option>
+                </select>
+            </div>
+            <button type="submit">Add Sub-Event</button>
+        </form>
+    </div>
+
+    <div class="events-list">
+        <h3>All Events</h3>
+        <div id="eventsList"></div>
+    </div>
+
+    <div class="form-section">
+        <h3>Event Registrations</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <select id="registrationEventSelect" onchange="loadRegistrations()" style="flex: 1; margin-right: 10px;">
+                <option value="">Select Event to View Registrations</option>
+            </select>
+            <button onclick="downloadRegistrations()" style="background: #28a745;" id="downloadBtn" disabled>📥 Download Event Registrations</button>
+        </div>
+        <div id="registrationsList"></div>
+    </div>
+
+    <div class="form-section">
+        <h3>Event Feedback</h3>
+        <select id="feedbackEventSelect" onchange="loadFeedback()">
+            <option value="">Select Event to View Feedback</option>
+        </select>
+        <div id="feedbackList"></div>
+    </div>
+
+    <!-- Edit Event Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h3>Edit Event</h3>
+            <div id="editError" class="error"></div>
+            <form id="editEventForm">
+                <input type="hidden" id="editEventId">
+                <div class="form-group">
+                    <input type="text" id="editEventTitle" placeholder="Event Title" required>
+                </div>
+                <div class="form-group">
+                    <textarea id="editEventDescription" placeholder="Event Description" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <select id="editEventVenue" required>
+                        <option value="">Select Venue</option>
+                        <option value="Naad">Naad</option>
+                        <option value="LDV 1st floor">LDV 1st floor</option>
+                        <option value="LDV 2nd floor">LDV 2nd floor</option>
+                        <option value="Sports Ground">Sports Ground</option>
+                        <option value="Mg 1st floor">Mg 1st floor</option>
+                        <option value="Mg 2nd floor">Mg 2nd floor</option>
+                        <option value="Seminar hall(Mg506)">Seminar hall(Mg506)</option>
+                        <option value="LDV seminar hall">LDV seminar hall</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <input type="text" id="editEventCoordinatorName" placeholder="Coordinator Name" required>
+                </div>
+                <div class="form-group">
+                    <input type="tel" id="editEventCoordinatorPhone" placeholder="Coordinator Phone Number" required pattern="[0-9]{10}" title="Phone number must be exactly 10 digits">
+                </div>
+                <div class="form-group">
+                    <input type="number" id="editEventBudget" placeholder="Budget Amount (Optional)" min="0" step="0.01">
+                </div>
+                <div class="form-group">
+                    <input type="text" id="editEventSponsor" placeholder="Sponsor Name (Optional)">
+                </div>
+                <div class="form-group">
+                    <label><input type="checkbox" id="editEventIsPaid"> Paid Event</label>
+                </div>
+                <div class="form-group" id="editPricingSection" style="display: none;">
+                    <input type="number" id="editEventPrice" placeholder="Event Price" min="0" step="0.01">
+                    <input type="number" id="editDiscountAmount" placeholder="Discount Amount (₹)" min="0" step="0.01">
+                    <input type="number" id="editDiscountAttendance" placeholder="Min Attendance % for Discount" min="0" max="100" step="0.1">
+                    <input type="number" id="editDiscountExamScore" placeholder="Min Exam Score % for Discount" min="0" max="100" step="0.1">
+                </div>
+                <div class="form-group">
+                    <input type="file" id="editEventMedia" accept="image/*,video/*" multiple>
+                    <label for="editEventMedia">Choose Event Images/Videos (Optional)</label>
+                    <div id="currentMedia"></div>
+                </div>
+                <div class="form-group">
+                    <label>Start Date & Time:</label>
+                    <input type="date" id="editEventStartDate" required>
+                    <input type="time" id="editEventStartTime" required>
+                </div>
+                <div class="form-group">
+                    <label>End Date & Time:</label>
+                    <input type="date" id="editEventEndDate" required>
+                    <input type="time" id="editEventEndTime" required>
+                </div>
+                <button type="submit">Update Event</button>
+                <button type="button" onclick="closeEditModal()">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Sub-Event Modal -->
+    <div id="editSubEventModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeEditSubEventModal()">&times;</span>
+            <h3>Edit Sub-Event</h3>
+            <div id="editSubEventError" class="error"></div>
+            <form id="editSubEventForm">
+                <input type="hidden" id="editSubEventId">
+                <input type="hidden" id="editSubEventParentId">
+                <div class="form-group">
+                    <input type="text" id="editSubEventTitle" placeholder="Sub-Event Title" required>
+                </div>
+                <div class="form-group">
+                    <textarea id="editSubEventDescription" placeholder="Sub-Event Description" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <select id="editSubEventLocation" required>
+                        <option value="">Select Location</option>
+                    </select>
+                </div>
+                <button type="submit">Update Sub-Event</button>
+                <button type="button" onclick="closeEditSubEventModal()">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let venues = [];
+        let faculty = [];
+        
+        async function loadData() {
+            try {
+                const eventsRes = await fetch('/api/events');
+                const events = await eventsRes.json();
+                
+                // No need to populate coordinator dropdowns anymore
+                
+                // Update parent event dropdown
+                const parentSelect = document.getElementById('parentEvent');
+                parentSelect.innerHTML = '<option value="">Select Parent Event</option>';
+                events.forEach(event => {
+                    parentSelect.innerHTML += `<option value="${event.Event_id}">${event.title}</option>`;
+                });
+                
+                // Update location dropdown when parent event changes (remove existing listener first)
+                parentSelect.removeEventListener('change', updateLocationOptions);
+                parentSelect.addEventListener('change', updateLocationOptions);
+                
+                // Update registration and feedback event dropdowns
+                const regSelect = document.getElementById('registrationEventSelect');
+                const feedSelect = document.getElementById('feedbackEventSelect');
+                regSelect.innerHTML = '<option value="">Select Event to View Registrations</option>';
+                feedSelect.innerHTML = '<option value="">Select Event to View Feedback</option>';
+                events.forEach(event => {
+                    regSelect.innerHTML += `<option value="${event.Event_id}">${event.title}</option>`;
+                    feedSelect.innerHTML += `<option value="${event.Event_id}">${event.title}</option>`;
+                });
+                
+                // Display events
+                displayEvents(events);
+            } catch (error) {
+                console.error('Failed to load data:', error);
+            }
+        }
+        
+        function displayEvents(events) {
+            console.log('Displaying events:', events.length, events);
+            const eventsList = document.getElementById('eventsList');
+            eventsList.innerHTML = events.map(event => `
+                <div class="event">
+                    <button class="edit-btn" onclick="editEvent(${event.Event_id})">Edit</button>
+                    <button class="edit-btn" onclick="deleteEvent(${event.Event_id})" style="background: #dc3545; right: 60px;">Delete</button>
+                    <h4>${event.title}</h4>
+                    ${event.media ? event.media.map(item => 
+                        item.type === 'image' ? 
+                        `<img src="${item.data}" alt="Event Image" style="max-width: 200px; height: auto; margin: 5px; border-radius: 5px;">` :
+                        `<video src="${item.data}" controls style="max-width: 200px; height: auto; margin: 5px; border-radius: 5px;"></video>`
+                    ).join('') : ''}
+                    <p>${event.description}</p>
+                    <p><strong>Venue:</strong> ${event.venue_name || 'No venue specified'}</p>
+                    <p><strong>Coordinator:</strong> ${event.coordinator_name || 'Not assigned'} ${event.coordinator_phone ? `(${event.coordinator_phone})` : ''}</p>
+                    <p><strong>Date:</strong> ${event.start_date} to ${event.end_date}</p>
+                    <p><strong>Time:</strong> ${event.start_time} - ${event.end_time}</p>
+                    <p><strong>Status:</strong> ${event.status}</p>
+                    <p><strong>Type:</strong> ${event.is_paid ? `Paid (₹${event.price})` : 'Free'}</p>
+                    ${event.is_paid && (event.discount_attendance || event.discount_exam_score) && event.discount_amount ? `<p><strong>Discount ₹${event.discount_amount}:</strong> ${event.discount_attendance ? `Attendance ≥${event.discount_attendance}%` : ''} ${event.discount_attendance && event.discount_exam_score ? ' OR ' : ''} ${event.discount_exam_score ? `Exam Score ≥${event.discount_exam_score}%` : ''}</p>` : ''}
+                    ${event.budget ? `<p><strong>Budget:</strong> ₹${event.budget}</p>` : ''}
+                    ${event.sponsor ? `<p><strong>Sponsor:</strong> ${event.sponsor}</p>` : ''}
+                    ${event.subEvents ? event.subEvents.map(sub => `
+                        <div class="subevent">
+                            <button onclick="editSubEvent(${event.Event_id}, ${sub.SubEvent_id})" style="float: right; background: #28a745; padding: 5px 10px; font-size: 12px; margin-left: 5px;">Edit</button>
+                            <button onclick="deleteSubEvent(${event.Event_id}, ${sub.SubEvent_id})" style="float: right; background: #dc3545; padding: 5px 10px; font-size: 12px;">Delete</button>
+                            <h5>📋 Sub-Event: ${sub.title}</h5>
+                            <p><strong>Parent Event:</strong> ${event.title}</p>
+                            <p>${sub.description}</p>
+                            <p><strong>Location:</strong> ${sub.location}</p>
+
+                        </div>
+                    `).join('') : ''}
+                </div>
+            `).join('');
+        }
+
+        async function fileToBase64(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function processMediaFiles(files) {
+            const mediaArray = [];
+            for (let file of files) {
+                const base64 = await fileToBase64(file);
+                mediaArray.push({
+                    type: file.type.startsWith('image/') ? 'image' : 'video',
+                    data: base64
+                });
+            }
+            return mediaArray;
+        }
+
+        document.getElementById('eventForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            try {
+                const mediaFiles = document.getElementById('eventMedia').files;
+                const mediaArray = mediaFiles.length > 0 ? await processMediaFiles(mediaFiles) : null;
+                
+                const isPaid = document.getElementById('eventIsPaid').checked;
+                const formData = {
+                    title: document.getElementById('eventTitle').value,
+                    description: document.getElementById('eventDescription').value,
+                    venue_name: document.getElementById('eventVenue').value,
+                    coordinator_name: document.getElementById('eventCoordinatorName').value,
+                    coordinator_phone: document.getElementById('eventCoordinatorPhone').value,
+                    start_date: document.getElementById('eventStartDate').value,
+                    end_date: document.getElementById('eventEndDate').value,
+                    start_time: document.getElementById('eventStartTime').value,
+                    end_time: document.getElementById('eventEndTime').value,
+                    budget: document.getElementById('eventBudget').value || null,
+                    sponsor: document.getElementById('eventSponsor').value || null,
+                    is_paid: isPaid,
+                    price: isPaid ? document.getElementById('eventPrice').value : null,
+                    discount_amount: isPaid ? document.getElementById('discountAmount').value : null,
+                    discount_attendance: isPaid ? document.getElementById('discountAttendance').value : null,
+                    discount_exam_score: isPaid ? document.getElementById('discountExamScore').value : null,
+                    media: mediaArray
+                };
+                
+                console.log('Sending event data:', formData);
+                
+                const response = await fetch('/api/events', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (response.ok) {
+                    document.getElementById('eventForm').reset();
+                    loadData();
+                    alert('Event added successfully!');
+                } else {
+                    if (response.status === 403) {
+                        alert('Session expired. Please login again.');
+                        window.location.href = '/';
+                        return;
+                    }
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        const error = await response.json();
+                        alert(error.error || 'Failed to add event');
+                    } else {
+                        alert('Session expired. Please login again.');
+                        window.location.href = '/';
+                    }
+                }
+            } catch (error) {
+                console.error('Error adding event:', error);
+                alert('Failed to add event: ' + error.message);
+            }
+        });
+
+        document.getElementById('subEventForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const eventId = document.getElementById('parentEvent').value;
+            const formData = {
+                title: document.getElementById('subEventTitle').value,
+                description: document.getElementById('subEventDescription').value,
+                location: document.getElementById('subEventLocation').value
+            };
+            
+            try {
+                const response = await fetch(`/api/events/${eventId}/subevents`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (response.ok) {
+                    document.getElementById('subEventForm').reset();
+                    loadData();
+                    alert('Sub-event added successfully!');
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'Failed to add sub-event');
+                }
+            } catch (error) {
+                alert('Failed to add sub-event');
+            }
+        });
+
+        async function editEvent(eventId) {
+            const eventsRes = await fetch('/api/events');
+            const events = await eventsRes.json();
+            const event = events.find(e => e.Event_id === eventId);
+            if (!event) return;
+            
+            console.log('Editing event:', event); // Debug log
+            
+            document.getElementById('editEventId').value = event.Event_id;
+            document.getElementById('editEventTitle').value = event.title;
+            document.getElementById('editEventDescription').value = event.description || '';
+            document.getElementById('editEventVenue').value = event.venue_name || '';
+            document.getElementById('editEventCoordinatorName').value = event.coordinator_name || '';
+            document.getElementById('editEventCoordinatorPhone').value = event.coordinator_phone || '';
+            document.getElementById('editEventStartDate').value = event.start_date;
+            document.getElementById('editEventEndDate').value = event.end_date;
+            document.getElementById('editEventStartTime').value = event.start_time;
+            document.getElementById('editEventEndTime').value = event.end_time;
+            document.getElementById('editEventBudget').value = event.budget || '';
+            document.getElementById('editEventSponsor').value = event.sponsor || '';
+            document.getElementById('editEventIsPaid').checked = event.is_paid || false;
+            document.getElementById('editEventPrice').value = event.price || '';
+            document.getElementById('editDiscountAmount').value = event.discount_amount || '';
+            document.getElementById('editDiscountAttendance').value = event.discount_attendance || '';
+            document.getElementById('editDiscountExamScore').value = event.discount_exam_score || '';
+            
+            console.log('Is paid:', event.is_paid, 'Price:', event.price); // Debug log
+            
+            // Show/hide pricing section
+            document.getElementById('editPricingSection').style.display = event.is_paid ? 'block' : 'none';
+            document.getElementById('currentMedia').innerHTML = event.media ? 
+                event.media.map(item => 
+                    item.type === 'image' ? 
+                    `<img src="${item.data}" style="max-width: 100px; margin: 5px;">` :
+                    `<video src="${item.data}" controls style="max-width: 100px; margin: 5px;"></video>`
+                ).join('') : 'No media';
+            
+            document.getElementById('editModal').style.display = 'block';
+        }
+        
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+            document.getElementById('editError').textContent = '';
+        }
+        
+        document.getElementById('editEventForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const eventId = document.getElementById('editEventId').value;
+            
+            const mediaFiles = document.getElementById('editEventMedia').files;
+            // Get current event from API instead of sessionStorage
+            const eventsRes = await fetch('/api/events');
+            const events = await eventsRes.json();
+            const currentEvent = events.find(e => e.Event_id == eventId);
+            const mediaArray = mediaFiles.length > 0 ? await processMediaFiles(mediaFiles) : currentEvent?.media;
+            
+            const isPaid = document.getElementById('editEventIsPaid').checked;
+            const formData = {
+                title: document.getElementById('editEventTitle').value,
+                description: document.getElementById('editEventDescription').value,
+                venue_name: document.getElementById('editEventVenue').value,
+                coordinator_name: document.getElementById('editEventCoordinatorName').value,
+                coordinator_phone: document.getElementById('editEventCoordinatorPhone').value,
+                start_date: document.getElementById('editEventStartDate').value,
+                end_date: document.getElementById('editEventEndDate').value,
+                start_time: document.getElementById('editEventStartTime').value,
+                end_time: document.getElementById('editEventEndTime').value,
+                budget: document.getElementById('editEventBudget').value || null,
+                sponsor: document.getElementById('editEventSponsor').value || null,
+                is_paid: isPaid,
+                price: isPaid ? document.getElementById('editEventPrice').value : null,
+                discount_amount: isPaid ? document.getElementById('editDiscountAmount').value : null,
+                discount_attendance: isPaid ? document.getElementById('editDiscountAttendance').value : null,
+                discount_exam_score: isPaid ? document.getElementById('editDiscountExamScore').value : null,
+                media: mediaArray
+            };
+            
+            try {
+                const response = await fetch(`/api/events/${eventId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (response.ok) {
+                    closeEditModal();
+                    await loadData();
+                    alert('Event updated successfully!');
+                } else {
+                    const error = await response.json();
+                    document.getElementById('editError').textContent = error.error || 'Failed to update event';
+                }
+            } catch (error) {
+                document.getElementById('editError').textContent = 'Failed to update event';
+            }
+        });
+        
+        // Modal close functionality
+        document.querySelector('.close').onclick = closeEditModal;
+        window.onclick = function(event) {
+            if (event.target == document.getElementById('editModal')) {
+                closeEditModal();
+            }
+        }
+        
+        async function loadEvents() {
+            const response = await fetch('/api/events');
+            const events = await response.json();
+            return events;
+        }
+
+        async function loadRegistrations() {
+            const eventId = document.getElementById('registrationEventSelect').value;
+            const downloadBtn = document.getElementById('downloadBtn');
+            
+            if (!eventId) {
+                document.getElementById('registrationsList').innerHTML = '';
+                downloadBtn.disabled = true;
+                return;
+            }
+            
+            downloadBtn.disabled = false;
+            
+            try {
+                const response = await fetch(`/api/registrations/${eventId}`);
+                const registrations = await response.json();
+                
+                if (registrations.length === 0) {
+                    document.getElementById('registrationsList').innerHTML = '<p>No registrations found for this event.</p>';
+                    return;
+                }
+                
+                const table = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Roll No</th>
+                                <th>Branch</th>
+                                <th>Mobile</th>
+                                <th>Email</th>
+                                <th>Registration Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${registrations.map(reg => `
+                                <tr>
+                                    <td>${reg.name}</td>
+                                    <td>${reg.rollNo}</td>
+                                    <td>${reg.branch}</td>
+                                    <td>${reg.mobile}</td>
+                                    <td>${reg.email}</td>
+                                    <td>${new Date(reg.registration_date).toLocaleDateString()}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                
+                document.getElementById('registrationsList').innerHTML = table;
+            } catch (error) {
+                document.getElementById('registrationsList').innerHTML = '<p>Failed to load registrations.</p>';
+            }
+        }
+        
+        async function loadFeedback() {
+            const eventId = document.getElementById('feedbackEventSelect').value;
+            if (!eventId) {
+                document.getElementById('feedbackList').innerHTML = '';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/feedback/${eventId}`);
+                const feedback = await response.json();
+                
+                if (feedback.length === 0) {
+                    document.getElementById('feedbackList').innerHTML = '<p>No feedback found for this event.</p>';
+                    return;
+                }
+                
+                const feedbackHtml = feedback.map(fb => `
+                    <div class="feedback-item">
+                        <p><strong>User:</strong> ${fb.user_name} (${fb.user_email})</p>
+                        <p><strong>Rating:</strong> <span class="rating">${'★'.repeat(fb.rating)}${'☆'.repeat(5-fb.rating)} (${fb.rating}/5)</span></p>
+                        <p><strong>Comments:</strong> ${fb.comments || 'No comments'}</p>
+                        <p><strong>Date:</strong> ${new Date(fb.feedback_date).toLocaleDateString()}</p>
+                    </div>
+                `).join('');
+                
+                document.getElementById('feedbackList').innerHTML = feedbackHtml;
+            } catch (error) {
+                document.getElementById('feedbackList').innerHTML = '<p>Failed to load feedback.</p>';
+            }
+        }
+
+        async function deleteEvent(eventId) {
+            if (confirm('Are you sure you want to delete this event? This will also delete all sub-events and registrations.')) {
+                try {
+                    const response = await fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+                    if (response.ok) {
+                        alert('Event deleted successfully!');
+                        loadData();
+                    } else {
+                        alert('Failed to delete event');
+                    }
+                } catch (error) {
+                    alert('Failed to delete event');
+                }
+            }
+        }
+        
+        async function updateLocationOptions() {
+            const parentEventId = document.getElementById('parentEvent').value;
+            const locationSelect = document.getElementById('subEventLocation');
+            
+            if (!parentEventId) {
+                locationSelect.innerHTML = '<option value="">Select Location</option>';
+                return;
+            }
+            
+            const eventsRes = await fetch('/api/events');
+            const events = await eventsRes.json();
+            const event = events.find(e => e.Event_id == parentEventId);
+            
+            if (!event) return;
+            
+            const locations = getLocationsByVenue(event.venue_name);
+            locationSelect.innerHTML = '<option value="">Select Location</option>';
+            locations.forEach(location => {
+                locationSelect.innerHTML += `<option value="${location}">${location}</option>`;
+            });
+        }
+        
+        function getLocationsByVenue(venueName) {
+            const venueLocations = {
+                'Naad': ['Main Hall', 'Stage Area', 'Backstage', 'VIP Section'],
+                'LDV 1st floor': ['Room 101', 'Room 102', 'Conference Hall', 'Lab 1'],
+                'LDV 2nd floor': ['Room 201', 'Room 202', 'Seminar Room', 'Lab 2'],
+                'Sports Ground': ['Football Field', 'Cricket Ground', 'Basketball Court', 'Track'],
+                'Mg 1st floor': ['Room 101', 'Room 102', 'Meeting Room', 'Lab A'],
+                'Mg 2nd floor': ['Room 201', 'Room 202', 'Conference Room', 'Lab B'],
+                'Seminar hall(Mg506)': ['Main Area', 'Presentation Zone', 'Discussion Corner'],
+                'LDV seminar hall': ['Main Hall', 'Presentation Area', 'Workshop Zone']
+            };
+            return venueLocations[venueName] || ['Main Area', 'Side Area', 'Back Area'];
+        }
+        
+        async function editSubEvent(eventId, subEventId) {
+            const eventsRes = await fetch('/api/events');
+            const events = await eventsRes.json();
+            const event = events.find(e => e.Event_id === eventId);
+            const subEvent = event?.subEvents?.find(sub => sub.SubEvent_id === subEventId);
+            
+            if (!subEvent) return;
+            
+            document.getElementById('editSubEventId').value = subEvent.SubEvent_id;
+            document.getElementById('editSubEventParentId').value = eventId;
+            document.getElementById('editSubEventTitle').value = subEvent.title;
+            document.getElementById('editSubEventDescription').value = subEvent.description || '';
+            
+            // Populate location dropdown based on event venue
+            const editLocationSelect = document.getElementById('editSubEventLocation');
+            const locations = getLocationsByVenue(event.venue_name);
+            editLocationSelect.innerHTML = '<option value="">Select Location</option>';
+            locations.forEach(location => {
+                const selected = location === subEvent.location ? 'selected' : '';
+                editLocationSelect.innerHTML += `<option value="${location}" ${selected}>${location}</option>`;
+            });
+            
+            document.getElementById('editSubEventModal').style.display = 'block';
+        }
+        
+        function closeEditSubEventModal() {
+            document.getElementById('editSubEventModal').style.display = 'none';
+            document.getElementById('editSubEventError').textContent = '';
+        }
+        
+        document.getElementById('editSubEventForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const eventId = document.getElementById('editSubEventParentId').value;
+            const subEventId = document.getElementById('editSubEventId').value;
+            const formData = {
+                title: document.getElementById('editSubEventTitle').value,
+                description: document.getElementById('editSubEventDescription').value,
+                location: document.getElementById('editSubEventLocation').value
+            };
+            
+            try {
+                const response = await fetch(`/api/events/${eventId}/subevents/${subEventId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (response.ok) {
+                    closeEditSubEventModal();
+                    loadData();
+                    alert('Sub-event updated successfully!');
+                } else {
+                    const error = await response.json();
+                    document.getElementById('editSubEventError').textContent = error.error || 'Failed to update sub-event';
+                }
+            } catch (error) {
+                document.getElementById('editSubEventError').textContent = 'Failed to update sub-event';
+            }
+        });
+
+        async function deleteSubEvent(eventId, subEventId) {
+            if (confirm('Are you sure you want to delete this sub-event?')) {
+                try {
+                    const response = await fetch(`/api/events/${eventId}/subevents/${subEventId}`, { method: 'DELETE' });
+                    if (response.ok) {
+                        alert('Sub-event deleted successfully!');
+                        loadData();
+                    } else {
+                        alert('Failed to delete sub-event');
+                    }
+                } catch (error) {
+                    alert('Failed to delete sub-event');
+                }
+            }
+        }
+
+        async function downloadRegistrations() {
+            const eventId = document.getElementById('registrationEventSelect').value;
+            if (!eventId) {
+                alert('Please select an event first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/download-registrations/${eventId}`);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `event_${eventId}_registrations.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'Download failed');
+                }
+            } catch (error) {
+                console.error('Download error:', error);
+                alert('Download failed');
+            }
+        }
+
+        async function logout() {
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.href = '/';
+        }
+
+
+
+
+
+        // Toggle pricing section visibility
+        document.getElementById('eventIsPaid').addEventListener('change', function() {
+            document.getElementById('pricingSection').style.display = this.checked ? 'block' : 'none';
+        });
+        
+        document.getElementById('editEventIsPaid').addEventListener('change', function() {
+            document.getElementById('editPricingSection').style.display = this.checked ? 'block' : 'none';
+        });
+
+        // Set minimum date to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('eventStartDate').min = today;
+        document.getElementById('eventEndDate').min = today;
+        document.getElementById('editEventStartDate').min = today;
+        document.getElementById('editEventEndDate').min = today;
+
+        loadData();
+    </script>
+</body>
+</html>
